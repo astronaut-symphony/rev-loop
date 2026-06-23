@@ -1,23 +1,22 @@
-# Dashboard Monitoring Revisi Dokumen
+# rev-loop
 
-Dashboard web-based untuk monitoring revisi dokumen per project. Login simple untuk 3 user, data tersimpan di Vercel Blob sebagai single JSON file.
+A lightweight document review-loop tracker. Submission → Revision → Update, until done.
 
-## Fitur
+Per-project dashboard for tracking document revision cycles. Each document has a timeline:
+- **Submission** (initial, one-time) — when the document was first submitted to a reviewer
+- **Revision** — reviewer feedback with a todo list of items to address
+- **Update** — author's response, references a revision, checks off addressed todos
 
-- Login pakai username/password (3 user, di-config via env var)
-- Tambah dokumen dengan metadata: nama project + nama dokumen
-- Track revisi per dokumen: tanggal revisi, tanggal kirim, note
-- Timeline view per dokumen
-- Search & group by project di dashboard
+Plus: status (In Progress / Completed), archive, batch revision/update across documents, and a global activity log.
 
-## Tech Stack
+## Tech stack
 
-- Next.js 15 (App Router) + React 19 + TypeScript
-- Tailwind CSS
-- Vercel Blob (storage)
-- JWT session (jose) di httpOnly cookie
+- Next.js 16 (App Router) + React 19 + TypeScript
+- Tailwind CSS v4
+- Vercel Blob (private access) — single JSON file as the DB
+- JWT session via `jose`, stored in an httpOnly cookie
 
-## Setup Local
+## Setup (local)
 
 1. Install dependencies:
 
@@ -25,11 +24,11 @@ Dashboard web-based untuk monitoring revisi dokumen per project. Login simple un
    npm install
    ```
 
-2. Copy `.env.example` ke `.env.local` dan isi:
+2. Copy `.env.example` to `.env.local` and fill in:
 
    ```
-   BLOB_READ_WRITE_TOKEN=...        # dari Vercel Blob dashboard
-   SESSION_SECRET=...                # random 32+ chars
+   BLOB_READ_WRITE_TOKEN=...   # from Vercel Blob dashboard
+   SESSION_SECRET=...           # random 32+ chars
    USERS=alice:pass1,bob:pass2,charlie:pass3
    ```
 
@@ -49,52 +48,86 @@ Dashboard web-based untuk monitoring revisi dokumen per project. Login simple un
    npm run dev
    ```
 
-   Buka http://localhost:3000
+   Open http://localhost:3000.
 
-## Deploy ke Vercel
+## Deploy to Vercel
 
-1. Push repo ini ke GitHub.
+1. Push to GitHub.
+2. Import the project at [vercel.com/new](https://vercel.com/new). Next.js is auto-detected.
+3. In the Vercel project dashboard → **Storage** → **Create Database** → **Blob**. Vercel auto-sets `BLOB_READ_WRITE_TOKEN`.
 
-2. Import project di [vercel.com](https://vercel.com/new). Next.js auto-detected.
+   For production safety, create a **separate** blob store for prod and connect it to the **Production** environment only. Keep your dev store connected to local `.env.local` so the two never collide.
 
-3. Di Vercel project dashboard → **Storage** → **Create Database** → pilih **Blob**. Vercel akan auto-set `BLOB_READ_WRITE_TOKEN` di Environment Variables.
+4. Add the remaining env vars in Vercel:
+   - `SESSION_SECRET`
+   - `USERS`
 
-4. Tambah environment variables manual:
-   - `SESSION_SECRET` — random string min 32 chars
-   - `USERS` — format: `user1:pass1,user2:pass2,user3:pass3`
+5. Deploy.
 
-5. Deploy. Selesai.
+## Data model
 
-## Struktur Data
+Stored in Vercel Blob as a single file `data/documents.json`:
 
-Tersimpan di Vercel Blob sebagai single file `data/documents.json`:
-
-```json
+```jsonc
 {
   "documents": [
     {
       "id": "uuid",
       "projectName": "Project A",
       "documentName": "Spec API v2",
+      "status": "in_progress",          // or "completed"
+      "archived": false,
       "createdBy": "alice",
       "createdAt": "2026-06-22T...",
-      "revisions": [
+      "timeline": [
         {
           "id": "uuid",
-          "tanggalRevisi": "2026-06-20",
-          "tanggalKirim": "2026-06-22",
-          "note": "Update endpoint /users",
+          "type": "submission",           // or "revision" | "update"
+          "date": "2026-06-22",
+          "note": "...",
           "addedBy": "alice",
           "addedAt": "2026-06-22T..."
+        },
+        {
+          "id": "uuid",
+          "type": "revision",
+          "date": "2026-06-25",
+          "note": "...",
+          "todos": [{ "id": "uuid", "text": "fix endpoint /users" }],
+          "addedBy": "bob",
+          "addedAt": "2026-06-25T..."
+        },
+        {
+          "id": "uuid",
+          "type": "update",
+          "date": "2026-06-28",
+          "note": "...",
+          "revisionId": "uuid-of-revision",
+          "checkedTodoIds": ["uuid-of-todo"],
+          "addedBy": "alice",
+          "addedAt": "2026-06-28T..."
         }
       ]
+    }
+  ],
+  "activities": [
+    {
+      "id": "uuid",
+      "timestamp": "2026-06-22T...",
+      "actor": "alice",
+      "kind": "document_created",
+      "docId": "uuid",
+      "documentName": "Spec API v2",
+      "projectName": "Project A"
     }
   ]
 }
 ```
 
-## Catatan
+Legacy data with the old schema (Indonesian field names, no `timeline`/`activities`) is auto-migrated on read.
 
-- Storage pakai last-write-wins. Kalau 2 user edit bersamaan, perubahan terakhir yang dipakai. Untuk 3 user dengan akses jarang bareng, ini fine.
-- Password di env var disimpan plaintext. Karena Vercel env vars sudah encrypted at rest dan cuma kamu yang akses, ini ok untuk use case internal kecil. Kalau mau lebih aman, ganti dengan bcrypt hash.
-- File JSON di-overwrite tiap save. Vercel Blob meng-handle versioning, tapi tidak ada UI rollback bawaan di app ini.
+## Notes
+
+- Storage is last-write-wins. Concurrent edits from multiple users can overwrite each other — fine for a small internal team.
+- User passwords sit in an env var in plaintext. Vercel env vars are encrypted at rest, so this is acceptable for low-stakes internal use. For anything sensitive, swap to bcrypt-hashed credentials.
+- Deletes are real deletes. Removed documents and events are gone from the DB — the activity log keeps a record (with name snapshot) but the underlying objects are not recoverable.

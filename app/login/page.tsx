@@ -22,13 +22,13 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Login gagal");
+        setError(data.error ?? "Login failed");
         return;
       }
       router.replace("/");
       router.refresh();
     } catch {
-      setError("Gagal terhubung ke server");
+      setError("Failed to connect to server");
     } finally {
       setLoading(false);
     }
@@ -41,13 +41,13 @@ export default function LoginPage() {
         className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-5"
       >
         <div>
-          <h1 className="text-xl font-semibold">Dashboard Revisi Dokumen</h1>
-          <p className="text-sm text-slate-500 mt-1">Silakan login untuk melanjutkan</p>
+          <h1 className="text-xl font-semibold">rev-loop</h1>
+          <p className="text-sm text-slate-500 mt-1">Please log in to continue</p>
         </div>
 
         <div className="space-y-3">
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Username</span>
+            <span className="block text-sm font-medium text-slate-700">Username</span>
             <input
               type="text"
               autoComplete="username"
@@ -58,7 +58,7 @@ export default function LoginPage() {
             />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Password</span>
+            <span className="block text-sm font-medium text-slate-700">Password</span>
             <input
               type="password"
               autoComplete="current-password"
@@ -81,7 +81,7 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full rounded-lg bg-slate-900 text-white text-sm font-medium px-3 py-2.5 hover:bg-slate-800 disabled:opacity-50"
         >
-          {loading ? "Memproses..." : "Login"}
+          {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
     </main>

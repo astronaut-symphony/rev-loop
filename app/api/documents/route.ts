@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireSession } from "@/lib/auth";
 import { readDb, writeDb } from "@/lib/blob";
+import { appendActivity } from "@/lib/activity";
 import type { Document } from "@/lib/types";
 
 export async function GET() {
@@ -30,18 +31,30 @@ export async function POST(req: Request) {
   const projectName = (body.projectName ?? "").trim();
   const documentName = (body.documentName ?? "").trim();
   if (!projectName || !documentName) {
-    return NextResponse.json({ error: "Nama project dan dokumen wajib diisi" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Project name and document name are required" },
+      { status: 400 },
+    );
   }
   const db = await readDb();
   const doc: Document = {
     id: randomUUID(),
     projectName,
     documentName,
+    status: "in_progress",
+    archived: false,
     createdBy: session.username,
     createdAt: new Date().toISOString(),
-    revisions: [],
+    timeline: [],
   };
   db.documents.push(doc);
+  appendActivity(db, {
+    actor: session.username,
+    kind: "document_created",
+    docId: doc.id,
+    documentName: doc.documentName,
+    projectName: doc.projectName,
+  });
   await writeDb(db);
   return NextResponse.json(doc, { status: 201 });
 }

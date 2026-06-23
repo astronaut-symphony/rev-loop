@@ -1,7 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { readDb } from "@/lib/blob";
 import TopBar from "./components/TopBar";
-import DashboardClient from "./components/DashboardClient";
+import ProjectListClient from "./components/ProjectListClient";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export default async function HomePage() {
     <>
       <TopBar username={session.username} />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <DashboardClient initialDocuments={db.documents} />
+        <ProjectListClient initialDocuments={db.documents} />
       </main>
     </>
   );
