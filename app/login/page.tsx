@@ -41,7 +41,7 @@ export default function LoginPage() {
         className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-5"
       >
         <div>
-          <h1 className="text-xl font-semibold">rev-loop</h1>
+          <h1 className="text-xl font-semibold tracking-wide">REV LOOP</h1>
           <p className="text-sm text-slate-500 mt-1">Please log in to continue</p>
         </div>
 

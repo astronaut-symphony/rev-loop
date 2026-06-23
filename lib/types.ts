@@ -57,6 +57,7 @@ export type ActivityKind =
   | "logout"
   | "document_created"
   | "document_deleted"
+  | "document_renamed"
   | "event_added"
   | "event_deleted"
   | "batch_added"
@@ -71,6 +72,7 @@ export type Activity = {
   docId?: string;
   documentName?: string;
   projectName?: string;
+  previousName?: string;
   eventType?: "submission" | "revision" | "update";
   eventLabel?: string;
   toStatus?: DocumentStatus;

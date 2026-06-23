@@ -60,6 +60,11 @@ export default function DocumentDetailClient({
   const [revisionId, setRevisionId] = useState<string>("");
   const [checkedTodoIds, setCheckedTodoIds] = useState<string[]>([]);
 
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(doc.documentName);
+  const [renameSubmitting, setRenameSubmitting] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
   const chronological = useMemo(
     () => [...doc.timeline].sort(compareEventsAsc),
     [doc.timeline],
@@ -178,6 +183,46 @@ export default function DocumentDetailClient({
     router.refresh();
   }
 
+  function startRename() {
+    setRenameValue(doc.documentName);
+    setRenameError(null);
+    setRenaming(true);
+  }
+
+  async function onRenameSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const next = renameValue.trim();
+    if (!next) {
+      setRenameError("Document name is required");
+      return;
+    }
+    if (next === doc.documentName) {
+      setRenaming(false);
+      return;
+    }
+    setRenameError(null);
+    setRenameSubmitting(true);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentName: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRenameError(data.error ?? "Failed to rename");
+        return;
+      }
+      setDoc(data as Document);
+      setRenaming(false);
+      router.refresh();
+    } catch {
+      setRenameError("Failed to connect to server");
+    } finally {
+      setRenameSubmitting(false);
+    }
+  }
+
   async function onToggleStatus() {
     const next: DocumentStatus = doc.status === "completed" ? "in_progress" : "completed";
     if (next === "completed" && !confirm("Mark this document as complete?")) return;
@@ -243,15 +288,56 @@ export default function DocumentDetailClient({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">{doc.projectName}</p>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <h1 className="text-xl font-semibold text-slate-900">{doc.documentName}</h1>
-              <StatusBadge status={doc.status} />
-              {doc.archived && (
-                <span className="text-xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5">
-                  Archived
-                </span>
-              )}
-            </div>
+            {renaming ? (
+              <form onSubmit={onRenameSubmit} className="mt-1 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    autoFocus
+                    required
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setRenaming(false);
+                        setRenameError(null);
+                      }
+                    }}
+                    className="text-xl font-semibold text-slate-900 rounded-lg border border-slate-300 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 min-w-0 flex-1"
+                  />
+                  <button
+                    type="submit"
+                    disabled={renameSubmitting}
+                    className="rounded-lg bg-slate-900 text-white text-sm font-medium px-3 py-1.5 hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {renameSubmitting ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenaming(false);
+                      setRenameError(null);
+                    }}
+                    className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {renameError && (
+                  <p className="text-sm text-red-600">{renameError}</p>
+                )}
+              </form>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <h1 className="text-xl font-semibold text-slate-900">{doc.documentName}</h1>
+                <StatusBadge status={doc.status} />
+                {doc.archived && (
+                  <span className="text-xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5">
+                    Archived
+                  </span>
+                )}
+              </div>
+            )}
             <p className="text-xs text-slate-500 mt-1">
               Created by {doc.createdBy} &middot; {doc.createdAt.slice(0, 10)}
               {doc.status === "completed" && doc.completedAt && (
@@ -271,6 +357,7 @@ export default function DocumentDetailClient({
           <ActionMenu
             isCompleted={doc.status === "completed"}
             isArchived={doc.archived}
+            onRename={startRename}
             onToggleStatus={onToggleStatus}
             onToggleArchive={onToggleArchive}
             onDelete={onDeleteDocument}
@@ -283,28 +370,32 @@ export default function DocumentDetailClient({
           Timeline ({doc.timeline.length} {doc.timeline.length === 1 ? "event" : "events"})
         </h2>
         <div className="flex gap-2 flex-wrap">
-          {!hasSubmission && (
+          {!hasSubmission && formMode !== "submission" && (
             <button
-              onClick={() => openForm(formMode === "submission" ? null : "submission")}
+              onClick={() => openForm("submission")}
               className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50"
             >
-              {formMode === "submission" ? "Cancel" : "+ Add Submission"}
+              + Add Submission
             </button>
           )}
-          <button
-            onClick={() => openForm(formMode === "revision" ? null : "revision")}
-            className="rounded-lg bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800"
-          >
-            {formMode === "revision" ? "Cancel" : "+ Add Revision"}
-          </button>
-          <button
-            onClick={() => openForm(formMode === "update" ? null : "update")}
-            disabled={revisionList.length === 0}
-            title={revisionList.length === 0 ? "Add a revision first" : ""}
-            className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {formMode === "update" ? "Cancel" : "+ Add Update"}
-          </button>
+          {formMode !== "revision" && (
+            <button
+              onClick={() => openForm("revision")}
+              className="rounded-lg bg-slate-900 text-white text-sm font-medium px-3 py-2 hover:bg-slate-800"
+            >
+              + Add Revision
+            </button>
+          )}
+          {formMode !== "update" && (
+            <button
+              onClick={() => openForm("update")}
+              disabled={revisionList.length === 0}
+              title={revisionList.length === 0 ? "Add a revision first" : ""}
+              className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              + Add Update
+            </button>
+          )}
         </div>
       </div>
 
@@ -313,7 +404,7 @@ export default function DocumentDetailClient({
           onSubmit={onSubmit}
           className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm"
         >
-          <p className="text-sm font-semibold text-slate-700">New submission</p>
+          <p className="text-lg font-semibold text-slate-900">New submission</p>
           <p className="text-xs text-slate-500">
             The initial submission of the document. The document was created earlier; this
             records when it was actually submitted to the reviewer. Only one submission per
@@ -344,7 +435,17 @@ export default function DocumentDetailClient({
               {error}
             </p>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFormMode(null);
+                resetForm();
+              }}
+              className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={submitting}
@@ -361,7 +462,7 @@ export default function DocumentDetailClient({
           onSubmit={onSubmit}
           className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm"
         >
-          <p className="text-sm font-semibold text-slate-700">New revision</p>
+          <p className="text-lg font-semibold text-slate-900">New revision</p>
           <label className="block">
             <span className="block text-sm font-medium text-slate-700">Revision Date</span>
             <input
@@ -434,7 +535,17 @@ export default function DocumentDetailClient({
               {error}
             </p>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFormMode(null);
+                resetForm();
+              }}
+              className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={submitting}
@@ -451,7 +562,7 @@ export default function DocumentDetailClient({
           onSubmit={onSubmit}
           className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm"
         >
-          <p className="text-sm font-semibold text-slate-700">New update</p>
+          <p className="text-lg font-semibold text-slate-900">New update</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="block text-sm font-medium text-slate-700">Update Date</span>
@@ -508,7 +619,7 @@ export default function DocumentDetailClient({
                     return (
                       <label
                         key={todo.id}
-                        className="flex items-start gap-2 text-sm cursor-pointer"
+                        className="flex items-center gap-2 text-sm cursor-pointer py-0.5"
                       >
                         <input
                           type="checkbox"
@@ -520,7 +631,7 @@ export default function DocumentDetailClient({
                                 : prev.filter((tid) => tid !== todo.id),
                             )
                           }
-                          className="mt-0.5 rounded border-slate-300"
+                          className="rounded border-slate-300"
                         />
                         <span className="text-slate-700">{todo.text}</span>
                       </label>
@@ -535,7 +646,17 @@ export default function DocumentDetailClient({
               {error}
             </p>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFormMode(null);
+                resetForm();
+              }}
+              className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={submitting}
@@ -605,12 +726,14 @@ export default function DocumentDetailClient({
 function ActionMenu({
   isCompleted,
   isArchived,
+  onRename,
   onToggleStatus,
   onToggleArchive,
   onDelete,
 }: {
   isCompleted: boolean;
   isArchived: boolean;
+  onRename: () => void;
   onToggleStatus: () => void;
   onToggleArchive: () => void;
   onDelete: () => void;
@@ -662,6 +785,14 @@ function ActionMenu({
           role="menu"
           className="absolute right-0 mt-1 w-48 rounded-lg border border-slate-200 bg-white shadow-md py-1 z-10"
         >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => run(onRename)}
+            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Rename
+          </button>
           <button
             type="button"
             role="menuitem"
